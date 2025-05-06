@@ -1,42 +1,20 @@
 {
   "expo": {
-    "name": "NYCSubwayChallenge",
-    "slug": "NYCSubwayChallenge",
-    "version": "1.0.0",
-    "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "nycsubwaychallenge",
+    "scheme": "acme",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
-    "ios": {
-      "supportsTablet": true
-    },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "edgeToEdgeEnabled": true
-    },
+    "orientation": "default",
     "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "output": "static"
     },
     "plugins": [
-      "expo-router",
       [
-        "expo-splash-screen",
+        "expo-router",
         {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
-          "resizeMode": "contain",
-          "backgroundColor": "#ffffff"
+          "origin": "https://n"
         }
       ]
     ],
-    "experiments": {
-      "typedRoutes": true
-    }
+    "name": "NYC Subway Challenge",
+    "slug": "frontend"
   }
 }

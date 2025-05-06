@@ -1,10 +1,9 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet, View } from 'react-native';
-import * as Location from 'expo-location';
+import { View, StyleSheet, Alert, Text } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import MapView, { Marker } from "react-native-maps";
+import { useEffect, useState } from "react";
+import * as Location from "expo-location";
 
-
-import React, { useEffect, useState } from 'react';
-import MapView, { Marker } from 'react-native-maps';
 
 const LATITUDE = 40.7249;
 const LONGITUDE = -73.9240;
