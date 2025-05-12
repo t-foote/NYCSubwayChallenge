@@ -1,0 +1,430 @@
+openapi: 3.0.3
+info:
+  title: NYC Subway Challenge API
+  version: 1.0.0
+  description: |
+    API for the NYC Subway Challenge app. Manages user attempts, visited stops, journey/segment generation, and integrates with the pathfinding service and MTA data.
+servers:
+  - url: https://your-backend-url.com/api
+    description: Production server
+  - url: http://localhost:3000/api
+    description: Local development server
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        unique_device_identifier:
+          type: string
+      required: [unique_device_identifier]
+    Attempt:
+      type: object
+      properties:
+        id:
+          type: integer
+        user_id:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+          nullable: true
+      required: [user_id, started_at]
+    VisitedStop:
+      type: object
+      properties:
+        id:
+          type: integer
+        stop_id:
+          type: integer
+        attempt_id:
+          type: integer
+        visitedat:
+          type: string
+          format: date-time
+        pending:
+          type: boolean
+      required: [stop_id, attempt_id, visitedat]
+    Journey:
+      type: object
+      properties:
+        attempt_id:
+          type: integer
+        segments:
+          type: array
+          items:
+            $ref: '#/components/schemas/Segment'
+    Segment:
+      type: object
+      properties:
+        id:
+          type: integer
+        attempt_id:
+          type: integer
+        trip_id:
+          type: integer
+        from_stop_id:
+          type: integer
+        to_stop_id:
+          type: integer
+      required: [attempt_id, trip_id, from_stop_id, to_stop_id]
+    Stop:
+      type: object
+      properties:
+        id:
+          type: integer
+        nyct_stop_id:
+          type: string
+        stop_name:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+    Route:
+      type: object
+      properties:
+        id:
+          type: integer
+        route_id:
+          type: string
+        route_name:
+          type: string
+    Transfer:
+      type: object
+      properties:
+        id:
+          type: integer
+        from_stop_id:
+          type: integer
+        to_stop_id:
+          type: integer
+        transfer_time_min:
+          type: integer
+        is_walking_transfer:
+          type: boolean
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+
+paths:
+  /users:
+    post:
+      summary: Register a new device/user
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                unique_device_identifier:
+                  type: string
+              required: [unique_device_identifier]
+      responses:
+        '201':
+          description: User registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '200':
+          description: User already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /attempts:
+    post:
+      summary: Start a new attempt for a user
+      operationId: startAttempt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                user_id:
+                  type: integer
+              required: [user_id]
+      responses:
+        '201':
+          description: Attempt started
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attempt'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /attempts/{attemptId}:
+    get:
+      summary: Get attempt details and progress
+      operationId: getAttempt
+      parameters:
+        - name: attemptId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Attempt details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attempt'
+        '404':
+          description: Attempt not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    patch:
+      summary: End an attempt
+      operationId: endAttempt
+      parameters:
+        - name: attemptId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Attempt ended
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Attempt'
+        '404':
+          description: Attempt not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /attempts/{attemptId}/stops_visited:
+    post:
+      summary: Mark a stop as visited (idempotent, supports offline sync)
+      operationId: markStopVisited
+      parameters:
+        - name: attemptId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                stop_id:
+                  type: integer
+                visitedat:
+                  type: string
+                  format: date-time
+              required: [stop_id, visitedat]
+      responses:
+        '201':
+          description: Stop marked as visited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitedStop'
+        '200':
+          description: Stop already marked as visited
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitedStop'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      summary: Get all visited stops for an attempt
+      operationId: getVisitedStops
+      parameters:
+        - name: attemptId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of visited stops
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VisitedStop'
+        '404':
+          description: Attempt not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /attempts/{attemptId}/journey:
+    post:
+      summary: Request (re)generation of the optimal journey (calls pathfinding service)
+      operationId: generateJourney
+      parameters:
+        - name: attemptId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '202':
+          description: Journey generation started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      summary: Get the current journey (list of segments)
+      operationId: getJourney
+      parameters:
+        - name: attemptId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Current journey
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Journey'
+        '404':
+          description: Journey not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /stops:
+    get:
+      summary: List all subway stops
+      operationId: getStops
+      responses:
+        '200':
+          description: List of stops
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Stop'
+
+  /routes:
+    get:
+      summary: List all subway routes
+      operationId: getRoutes
+      responses:
+        '200':
+          description: List of routes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Route'
+
+  /transfers:
+    get:
+      summary: List all transfer connections
+      operationId: getTransfers
+      responses:
+        '200':
+          description: List of transfers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transfer'
+
+  /pathfinding/solve:
+    post:
+      summary: (Internal) Compute optimal journey for an attempt
+      operationId: solvePathfinding
+      description: |
+        Internal endpoint. Called by backend to compute optimal journey. Not exposed to frontend clients.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                attempt_id:
+                  type: integer
+                stops_left:
+                  type: array
+                  items:
+                    type: integer
+                current_location:
+                  type: object
+                  properties:
+                    stop_id:
+                      type: integer
+              required: [attempt_id, stops_left, current_location]
+      responses:
+        '200':
+          description: Journey solution
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Journey'
+        '400':
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error' 
