@@ -1,78 +1,32 @@
-import * as SQLite from 'expo-sqlite';
+// In-memory storage for visited stops
+const visitedStops: Array<{ id: string; name: string; time: string; pending: boolean }> = [];
 
-const db = SQLite.openDatabase('nycsubwaychallenge.db');
-
-function init() {
-  db.transaction(tx => {
-    tx.executeSql(
-      `CREATE TABLE IF NOT EXISTS visited_stops (
-        id TEXT PRIMARY KEY NOT NULL,
-        name TEXT,
-        time TEXT,
-        pending INTEGER
-      );`
-    );
-  });
+export async function addVisitedStop(stop: { id: string; name: string; time: string }): Promise<void> {
+  console.log('addVisitedStop: adding stop', stop);
+  visitedStops.push({ ...stop, pending: true });
+  console.log('addVisitedStop: current stops', visitedStops);
 }
 
-init();
-
-export function addVisitedStop(stop: { id: string, name: string, time: string }) {
-  return new Promise<void>((resolve, reject) => {
-    db.transaction(tx => {
-      tx.executeSql(
-        'INSERT INTO visited_stops (id, name, time, pending) VALUES (?, ?, ?, 1);',
-        [stop.id, stop.name, stop.time],
-        () => resolve(),
-        (_, error) => { reject(error); return false; }
-      );
-    });
-  });
+export async function getVisitedStops(): Promise<Array<{ id: string; name: string; time: string; pending: boolean }>> {
+  console.log('getVisitedStops: returning', visitedStops);
+  return visitedStops;
 }
 
-export function getVisitedStops() {
-  return new Promise<any[]>((resolve, reject) => {
-    db.transaction(tx => {
-      tx.executeSql(
-        'SELECT * FROM visited_stops ORDER BY time DESC;',
-        [],
-        (_, { rows }) => {
-          resolve(rows._array.map(row => ({ ...row, pending: !!row.pending })));
-        },
-        (_, error) => { reject(error); return false; }
-      );
-    });
-  });
-}
-
-export function markStopAsSynced(id: string) {
-  return new Promise<void>((resolve, reject) => {
-    db.transaction(tx => {
-      tx.executeSql(
-        'UPDATE visited_stops SET pending = 0 WHERE id = ?;',
-        [id],
-        () => resolve(),
-        (_, error) => { reject(error); return false; }
-      );
-    });
-  });
-}
-
-// Placeholder for backend sync
-export async function syncPendingStops() {
-  const stops = await new Promise<any[]>((resolve, reject) => {
-    db.transaction(tx => {
-      tx.executeSql(
-        'SELECT * FROM visited_stops WHERE pending = 1;',
-        [],
-        (_, { rows }) => resolve(rows._array),
-        (_, error) => { reject(error); return false; }
-      );
-    });
-  });
-  // TODO: Replace with real API call
-  for (const stop of stops) {
-    // Simulate successful sync
-    await markStopAsSynced(stop.id);
+export async function markStopAsSynced(id: string): Promise<void> {
+  console.log('markStopAsSynced: marking stop', id);
+  const stop = visitedStops.find(s => s.id === id);
+  if (stop) {
+    stop.pending = false;
+    console.log('markStopAsSynced: updated stop', stop);
   }
+}
+
+export async function syncPendingStops(): Promise<void> {
+  console.log('syncPendingStops: starting sync');
+  for (const stop of visitedStops) {
+    if (stop.pending) {
+      await markStopAsSynced(stop.id);
+    }
+  }
+  console.log('syncPendingStops: finished sync');
 } 

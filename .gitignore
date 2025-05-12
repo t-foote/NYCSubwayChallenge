@@ -2,7 +2,7 @@
 .env.*
 .expo
 
-.DS_Store
+specs.md
 
 static/scripts/csv_out/*
 .DS_Store

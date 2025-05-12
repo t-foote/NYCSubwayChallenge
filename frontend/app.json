@@ -12,7 +12,8 @@
         {
           "origin": "https://n"
         }
-      ]
+      ],
+      "expo-sqlite"
     ],
     "name": "NYC Subway Challenge",
     "slug": "frontend",

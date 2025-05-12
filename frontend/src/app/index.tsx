@@ -1,94 +1,62 @@
 import { Link } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Text, View, TouchableOpacity, FlatList, ActivityIndicator } from "react-native";
+import { Text, View, TouchableOpacity, FlatList } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-// @ts-ignore
-import * as SecureStore from 'expo-secure-store';
-import { registerUser, startAttempt, markStopVisited, getVisitedStops } from "../api/index";
-
-const DEVICE_ID_KEY = 'device_id';
-
-async function getOrCreateDeviceId() {
-  let id = await SecureStore.getItemAsync(DEVICE_ID_KEY);
-  if (!id) {
-    id = Math.random().toString(36).substring(2) + Date.now().toString(36);
-    await SecureStore.setItemAsync(DEVICE_ID_KEY, id);
-  }
-  return id;
-}
+import { getVisitedStops, addVisitedStop, syncPendingStops } from "../sqlite/visitedStops";
 
 export default function Page() {
-  const [visitedStops, setVisitedStops] = useState([]);
+  const [visitedStops, setVisitedStops] = useState<Array<{ id: string; name: string; time: string; pending: boolean }>>([]);
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null);
-  const [attempt, setAttempt] = useState(null);
-  const [stops, setStops] = useState([]);
-  const [selectedStop, setSelectedStop] = useState(null);
-  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      // 1. Get or create device ID
-      const deviceId = await getOrCreateDeviceId();
-      // 2. Register user
-      const userObj = await registerUser(deviceId);
-      setUser(userObj);
-      // 3. Start attempt
-      const attemptObj = await startAttempt(userObj.id);
-      setAttempt(attemptObj);
-      // 4. Fetch stops for picker
-      const stopsRes = await fetch('/stops'); // TODO: Replace with real API call
-      const stopsList = await stopsRes.json();
-      setStops(stopsList);
-      // 5. Fetch visited stops
-      await loadStops(attemptObj.id);
-      setLoading(false);
-    })();
+    loadStops();
+    const interval = setInterval(() => {
+      syncPendingStops().then(loadStops);
+    }, 10000); // Try syncing every 10s
+    return () => clearInterval(interval);
   }, []);
 
-  async function loadStops(attemptId) {
+  async function loadStops() {
     setLoading(true);
-    const stops = await getVisitedStops(attemptId);
+    console.log('loadStops: starting load');
+    const stops = await getVisitedStops();
+    console.log('loadStops: got stops', stops);
     setVisitedStops(stops);
     setLoading(false);
+    console.log('loadStops: finished');
   }
 
   async function handleVisitStop() {
-    if (!selectedStop || !attempt) return;
-    setSyncing(true);
-    const now = new Date().toISOString();
-    await markStopVisited(attempt.id, selectedStop, now);
-    await loadStops(attempt.id);
-    setSyncing(false);
-  }
-
-  if (loading) {
-    return <View className="flex-1 justify-center items-center"><ActivityIndicator size="large" /></View>;
+    // For demo, just add a fake stop
+    await addVisitedStop({
+      id: Date.now().toString(),
+      name: `Demo Stop ${visitedStops.length + 1}`,
+      time: new Date().toLocaleTimeString(),
+    });
+    loadStops();
   }
 
   return (
     <View className="flex flex-1">
-      <Content
-        visitedStops={visitedStops}
-        stops={stops}
-        selectedStop={selectedStop}
-        setSelectedStop={setSelectedStop}
-        onVisitStop={handleVisitStop}
-        syncing={syncing}
-      />
+      {loading ? (
+        <View className="flex-1 justify-center items-center">
+          <Text>Loading...</Text>
+        </View>
+      ) : (
+        <Content visitedStops={visitedStops} loading={loading} onVisitStop={handleVisitStop} />
+      )}
       <Footer />
     </View>
   );
 }
 
-function Content({ visitedStops, stops, selectedStop, setSelectedStop, onVisitStop, syncing }) {
+function Content({ visitedStops, loading, onVisitStop }: { visitedStops: Array<{ id: string; name: string; time: string; pending: boolean }>; loading: boolean; onVisitStop: () => void }) {
   const insets = useSafeAreaInsets();
   return (
     <View className="flex-1 bg-gray-50" style={{ paddingTop: insets.top }}>
       <FlatList
         data={visitedStops}
-        keyExtractor={item => item.id?.toString() || Math.random().toString()}
+        keyExtractor={item => item.id}
         contentContainerStyle={{ paddingBottom: 32, paddingHorizontal: 20 }}
         ListHeaderComponent={
           <>
@@ -105,7 +73,7 @@ function Content({ visitedStops, stops, selectedStop, setSelectedStop, onVisitSt
                   <Text className="font-bold text-gray-800">{visitedStops.length}</Text> Stops Visited
                 </Text>
                 <Text className="text-gray-600">
-                  <Text className="font-bold text-gray-800">{470 - visitedStops.length}</Text> Stops Left
+                  <Text className="font-bold text-gray-800">470</Text> Stops Left
                 </Text>
                 <Text className="text-gray-600">
                   <Text className="font-bold text-gray-800">00:12</Text> Elapsed
@@ -116,41 +84,25 @@ function Content({ visitedStops, stops, selectedStop, setSelectedStop, onVisitSt
             <Text className="text-xl font-bold mb-2 text-gray-800">
               Visited Stops
             </Text>
-            <View className="mb-4">
-              <Text className="mb-2">Select a stop to mark as visited:</Text>
-              <View style={{ backgroundColor: 'white', borderRadius: 8, padding: 8 }}>
-                <select
-                  value={selectedStop || ''}
-                  onChange={e => setSelectedStop(e.target.value)}
-                  style={{ width: '100%', padding: 8, borderRadius: 8 }}
-                >
-                  <option value="" disabled>Select a stop...</option>
-                  {stops.map(stop => (
-                    <option key={stop.id} value={stop.id}>{stop.stop_name}</option>
-                  ))}
-                </select>
-              </View>
-            </View>
           </>
         }
         renderItem={({ item }) => (
           <View className="bg-white rounded-xl py-4 px-5 mb-3 flex-row justify-between items-center shadow-sm">
             <Text className="text-base font-semibold text-gray-800 flex-1">
-              {item.stop_name || item.name || item.stop_id}
+              {item.name}
             </Text>
             <Text className="text-sm text-gray-500 ml-4 min-w-[70px] text-right">
-              {item.visitedat ? new Date(item.visitedat).toLocaleTimeString() : ''}
+              {item.time}
             </Text>
+            {item.pending && (
+              <Text className="text-xs text-orange-500 ml-2">Pending Sync</Text>
+            )}
           </View>
         )}
         ListFooterComponent={
-          <TouchableOpacity
-            className="bg-blue-600 rounded-2xl mt-6 py-[18px] items-center"
-            onPress={onVisitStop}
-            disabled={!selectedStop || syncing}
-          >
+          <TouchableOpacity className="bg-blue-600 rounded-2xl mt-6 py-[18px] items-center" onPress={onVisitStop}>
             <Text className="text-lg font-bold text-white tracking-wide">
-              {syncing ? 'Syncing...' : 'Mark Stop as Visited'}
+              Mark Stop as Visited
             </Text>
           </TouchableOpacity>
         }
