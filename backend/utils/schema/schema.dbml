@@ -63,7 +63,7 @@ Table shape_points {
 
 Table users {
   id integer [pk, increment, not null, unique]
-  unique_device_identifier integer [not null, unique]
+  unique_device_uuid varchar(1000) [not null, unique]
 }
 
 Table attempts {

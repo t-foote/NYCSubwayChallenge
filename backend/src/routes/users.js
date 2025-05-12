@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const db = require('../utils/db');
+const supabase = require('../utils/db');
 
 // POST /users
 router.post('/', async (req, res) => {
@@ -10,19 +10,23 @@ router.post('/', async (req, res) => {
   }
   try {
     // Check if user exists
-    const existing = await db.query(
-      'SELECT * FROM users WHERE unique_device_identifier = $1',
-      [unique_device_identifier]
-    );
-    if (existing.rows.length > 0) {
-      return res.status(200).json(existing.rows[0]);
+    const { data: existing, error: selectError } = await supabase
+      .from('users')
+      .select('*')
+      .eq('unique_device_uuid', unique_device_identifier)
+      .maybeSingle();
+    if (selectError) throw selectError;
+    if (existing) {
+      return res.status(200).json(existing);
     }
     // Create user
-    const result = await db.query(
-      'INSERT INTO users (unique_device_identifier) VALUES ($1) RETURNING *',
-      [unique_device_identifier]
-    );
-    return res.status(201).json(result.rows[0]);
+    const { data, error: insertError } = await supabase
+      .from('users')
+      .insert([{ unique_device_uuid: unique_device_identifier }])
+      .select()
+      .maybeSingle();
+    if (insertError) throw insertError;
+    return res.status(201).json(data);
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Internal server error' });
