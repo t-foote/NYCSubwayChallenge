@@ -4,3 +4,5 @@
 
 .DS_Store
 
+static/scripts/csv_out/*
+.DS_Store
