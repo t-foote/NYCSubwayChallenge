@@ -1,25 +1,47 @@
 import { Link } from "expo-router";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Text, View, TouchableOpacity, FlatList } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-const visitedStops = [
-  { id: '1', name: 'Times Sq - 42 St', time: '10:05 AM' },
-  { id: '2', name: 'Grand Central - 42 St', time: '10:15 AM' },
-  { id: '3', name: '34 St - Herald Sq', time: '10:25 AM' },
-  { id: '4', name: '14 St - Union Sq', time: '10:35 AM' },
-];
+import { getVisitedStops, addVisitedStop, syncPendingStops } from "../sqlite/visitedStops";
 
 export default function Page() {
+  const [visitedStops, setVisitedStops] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadStops();
+    const interval = setInterval(() => {
+      syncPendingStops().then(loadStops);
+    }, 10000); // Try syncing every 10s
+    return () => clearInterval(interval);
+  }, []);
+
+  async function loadStops() {
+    setLoading(true);
+    const stops = await getVisitedStops();
+    setVisitedStops(stops);
+    setLoading(false);
+  }
+
+  async function handleVisitStop() {
+    // For demo, just add a fake stop
+    await addVisitedStop({
+      id: Date.now().toString(),
+      name: `Demo Stop ${visitedStops.length + 1}`,
+      time: new Date().toLocaleTimeString(),
+    });
+    loadStops();
+  }
+
   return (
     <View className="flex flex-1">
-      <Content />
+      <Content visitedStops={visitedStops} loading={loading} onVisitStop={handleVisitStop} />
       <Footer />
     </View>
   );
 }
 
-function Content() {
+function Content({ visitedStops, loading, onVisitStop }) {
   const insets = useSafeAreaInsets();
   return (
     <View className="flex-1 bg-gray-50" style={{ paddingTop: insets.top }}>
@@ -63,12 +85,15 @@ function Content() {
             <Text className="text-sm text-gray-500 ml-4 min-w-[70px] text-right">
               {item.time}
             </Text>
+            {item.pending && (
+              <Text className="text-xs text-orange-500 ml-2">Pending Sync</Text>
+            )}
           </View>
         )}
         ListFooterComponent={
-          <TouchableOpacity className="bg-blue-600 rounded-2xl mt-6 py-[18px] items-center">
+          <TouchableOpacity className="bg-blue-600 rounded-2xl mt-6 py-[18px] items-center" onPress={onVisitStop}>
             <Text className="text-lg font-bold text-white tracking-wide">
-              Generate Remaining Route
+              Mark Stop as Visited
             </Text>
           </TouchableOpacity>
         }
