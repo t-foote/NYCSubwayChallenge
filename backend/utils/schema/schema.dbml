@@ -1,0 +1,107 @@
+// Static data / lookup tables (not written to):
+// These will be populated upon deployment to Supabase using static MTA data and a script
+// These roughly follow the .txt files provided by MTA static downloads
+
+Table stops {
+  id integer [pk, increment, not null, unique]
+  nyct_stop_id varchar(4) [not null, unique]
+  stop_name varchar(256) [not null]
+  latitude float8 [not null]
+  longitude float8 [not null]
+}
+
+Table trips_scheduled {
+  id integer [pk, increment, not null, unique]
+  nyct_trip_id varchar(45) [not null, unique]
+  service_id integer [note: "0, 1, or 2; for Weekday, Saturday, Sunday, respectively"]
+  route_id integer [ref: > routes.id, not null]
+  shape_id integer [ref: > shapes.id, not null]
+  
+  note: "stores all scheduled NYCT Trips"
+}
+
+Table transfers {
+  id integer [pk, increment, not null, unique]
+  from_stop_id integer [ref: > stops.id, not null]
+  to_stop_id integer [ref: > stops.id, not null]
+  transfer_time_min integer [default: 0]
+  is_walking_transfer bool [not null]
+}
+
+Table trip_stop_times_scheduled {
+  id integer [pk, increment, not null, unique]
+  trip_id integer [ref: > trips_scheduled.id, not null]
+  stop_id integer [ref: > stops.id, not null]
+  dep_time time [not null]
+  dep_time_is_next_day bool [default: FALSE]
+  arr_time time [not null]
+  arr_time_is_next_day bool [default: FALSE]
+  sequence_number integer [not null]
+}
+
+Table routes {
+  id integer [pk, increment, not null, unique]
+  route_id varchar(2) [not null, unique]
+  route_name varchar(100)
+}
+
+Table shapes {
+  id integer [pk, increment, not null, unique]
+  shape_id varchar(10) [not null]
+}
+
+Table shape_points {
+  id integer [pk, increment, not null, unique]
+  shape_pt_sequence integer [not null]
+  shape_id integer [ref: > shapes.id, not null]
+  latitude float8 [not null]
+  longitude float8 [not null]
+}
+
+// Dynamic Tables
+// These will be updated when users use the app
+
+Table users {
+  id integer [pk, increment, not null, unique]
+  unique_device_identifier integer [not null, unique]
+}
+
+Table attempts {
+  id integer [pk, increment, not null, unique]
+  user_id integer [ref: > users.id, not null]
+  started_at timestamp 
+  ended_at timestamp
+
+  note: "Represents a single challenge attempt by a user"
+}
+Table stops_visited {
+  id integer [pk, increment, not null, unique]
+  stop_id integer [ref: > stops.id, not null]
+  attempt_id integer [ref: > attempts.id, not null]
+  visitedat timestamp
+}
+
+Table trip_stop_times_realtime {
+  id integer [pk, increment, not null, unique]
+  trip_id integer [ref: > trips_scheduled.id, not null]
+  stop_id integer [ref: > stops.id, not null]
+  dep_time time [not null]
+  dep_time_is_next_day bool [default: FALSE]
+  arr_time time [not null]
+  arr_time_is_next_day bool [default: FALSE]
+  sequence_number integer [not null]
+}
+
+// When a user requests a new calculation of most optimal journey, the app
+Table segment {
+  id integer [pk, increment, not null, unique]
+  attempt_id integer [ref: > attempts.id, not null]
+  trip_id integer [ref: > trips_scheduled.id, not null]
+  from_stop_id integer [ref: > stops.id, not null]
+  to_stop_id integer [ref: > stops.id, not null]
+
+
+  note: "represents a part of a journey that the user is to take."
+}
+
+
