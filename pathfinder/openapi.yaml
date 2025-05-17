@@ -1,0 +1,100 @@
+openapi: 3.0.0
+info:
+  title: NYC Subway Challenge Pathfinder API
+  description: Microservice for calculating optimal routes between subway stops
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:8001
+    description: Local development server
+
+paths:
+  /calculate-route:
+    get:
+      summary: Calculate optimal route to visit remaining stops
+      description: |
+        Takes a list of visited stops and returns the optimal route to visit all remaining stops.
+        The route is broken down into segments, where each segment represents a single train trip.
+      parameters:
+        - name: visited_stops
+          in: query
+          required: true
+          description: Comma-separated list of stop IDs that have been visited
+          schema:
+            type: string
+            example: "123A,456B,789C"
+        - name: current_stop
+          in: query
+          required: true
+          description: The stop ID where the user currently is
+          schema:
+            type: string
+            example: "123A"
+      responses:
+        '200':
+          description: Successful route calculation
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  journey:
+                    type: object
+                    properties:
+                      segments:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            start_stop_id:
+                              type: string
+                              description: ID of the starting stop for this segment
+                              example: "123A"
+                            end_stop_id:
+                              type: string
+                              description: ID of the ending stop for this segment
+                              example: "456B"
+                            route_id:
+                              type: string
+                              description: ID of the subway route to take
+                              example: "A"
+                            estimated_time:
+                              type: integer
+                              description: Estimated time in seconds for this segment
+                              example: 300
+                            stops_in_segment:
+                              type: array
+                              items:
+                                type: string
+                              description: List of stop IDs in this segment
+                              example: ["123A", "124B", "125C", "456B"]
+                  total_estimated_time:
+                    type: integer
+                    description: Total estimated time in seconds for the entire journey
+                    example: 1800
+                  remaining_stops:
+                    type: array
+                    items:
+                      type: string
+                    description: List of stop IDs that will be visited in this journey
+                    example: ["456B", "789C", "101D"]
+        '400':
+          description: Invalid input parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Invalid stop ID format"
+        '500':
+          description: Server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Failed to calculate route"
