@@ -1,8 +1,9 @@
 import { Link } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Text, View, TouchableOpacity, FlatList } from "react-native";
+import { Text, View, TouchableOpacity, FlatList, Modal } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getVisitedStops, addVisitedStop, syncPendingStops } from "../sqlite/visitedStops";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function Page() {
   const [visitedStops, setVisitedStops] = useState<Array<{ id: string; name: string; time: string; pending: boolean }>>([]);
@@ -52,11 +53,28 @@ export default function Page() {
 
 function Content({ visitedStops, loading, onVisitStop }: { visitedStops: Array<{ id: string; name: string; time: string; pending: boolean }>; loading: boolean; onVisitStop: () => void }) {
   const insets = useSafeAreaInsets();
+  const [isVisitedStopsModalVisible, setIsVisitedStopsModalVisible] = useState(false);
+
+  const renderVisitedStop = ({ item }: { item: { id: string; name: string; time: string; pending: boolean } }) => (
+    <View className="bg-white rounded-xl py-4 px-5 mb-3 flex-row justify-between items-center shadow-sm">
+      <Text className="text-base font-semibold text-gray-800 flex-1">
+        {item.name}
+      </Text>
+      <Text className="text-sm text-gray-500 ml-4 min-w-[70px] text-right">
+        {item.time}
+      </Text>
+      {item.pending && (
+        <Text className="text-xs text-orange-500 ml-2">Pending Sync</Text>
+      )}
+    </View>
+  );
+
   return (
     <View className="flex-1 bg-gray-50" style={{ paddingTop: insets.top }}>
       <FlatList
-        data={visitedStops}
+        data={[]}
         keyExtractor={item => item.id}
+        renderItem={() => null}
         contentContainerStyle={{ paddingBottom: 32, paddingHorizontal: 20 }}
         ListHeaderComponent={
           <>
@@ -81,24 +99,22 @@ function Content({ visitedStops, loading, onVisitStop }: { visitedStops: Array<{
               </View>
             </View>
 
-            <Text className="text-xl font-bold mb-2 text-gray-800">
-              Visited Stops
-            </Text>
+            <TouchableOpacity 
+              className="bg-white rounded-xl shadow-sm mb-6 p-4"
+              onPress={() => setIsVisitedStopsModalVisible(true)}
+            >
+              <View className="flex-row justify-between items-center">
+                <Text className="text-xl font-bold text-gray-800">
+                  Visited Stops
+                </Text>
+                <Ionicons name="chevron-forward" size={24} color="#6B7280" />
+              </View>
+              <Text className="text-gray-600 mt-1">
+                {visitedStops.length} stops visited
+              </Text>
+            </TouchableOpacity>
           </>
         }
-        renderItem={({ item }) => (
-          <View className="bg-white rounded-xl py-4 px-5 mb-3 flex-row justify-between items-center shadow-sm">
-            <Text className="text-base font-semibold text-gray-800 flex-1">
-              {item.name}
-            </Text>
-            <Text className="text-sm text-gray-500 ml-4 min-w-[70px] text-right">
-              {item.time}
-            </Text>
-            {item.pending && (
-              <Text className="text-xs text-orange-500 ml-2">Pending Sync</Text>
-            )}
-          </View>
-        )}
         ListFooterComponent={
           <TouchableOpacity className="bg-blue-600 rounded-2xl mt-6 py-[18px] items-center" onPress={onVisitStop}>
             <Text className="text-lg font-bold text-white tracking-wide">
@@ -107,6 +123,27 @@ function Content({ visitedStops, loading, onVisitStop }: { visitedStops: Array<{
           </TouchableOpacity>
         }
       />
+
+      <Modal
+        visible={isVisitedStopsModalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+      >
+        <View className="flex-1 bg-gray-50">
+          <View className="flex-row justify-between items-center p-4 border-b border-gray-200 bg-white">
+            <Text className="text-xl font-bold text-gray-800">Visited Stops</Text>
+            <TouchableOpacity onPress={() => setIsVisitedStopsModalVisible(false)}>
+              <Ionicons name="close" size={24} color="#6B7280" />
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={visitedStops}
+            keyExtractor={item => item.id}
+            renderItem={renderVisitedStop}
+            contentContainerStyle={{ padding: 16 }}
+          />
+        </View>
+      </Modal>
     </View>
   );
 }
