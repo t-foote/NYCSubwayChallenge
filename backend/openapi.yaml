@@ -11,6 +11,12 @@ servers:
     description: Local development server
 
 components:
+  securitySchemes:
+    deviceAuth:
+      type: apiKey
+      in: header
+      name: X-Device-ID
+      description: Device identifier for authentication
   schemas:
     User:
       type: object
@@ -44,12 +50,12 @@ components:
           type: integer
         attempt_id:
           type: integer
-        visitedat:
+        visited_at:
           type: string
           format: date-time
         pending:
           type: boolean
-      required: [stop_id, attempt_id, visitedat]
+      required: [stop_id, attempt_id, visited_at]
     Journey:
       type: object
       properties:
@@ -115,12 +121,32 @@ components:
           type: string
         message:
           type: string
+    PaginatedResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+        page:
+          type: integer
+          minimum: 1
+        page_size:
+          type: integer
+          minimum: 1
+        total:
+          type: integer
+          minimum: 0
+        has_more:
+          type: boolean
 
 paths:
   /users:
     post:
       summary: Register a new device/user
       operationId: registerUser
+      security:
+        - deviceAuth: []
       requestBody:
         required: true
         content:
@@ -150,11 +176,25 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many requests
+          headers:
+            X-RateLimit-Limit:
+              schema:
+                type: integer
+            X-RateLimit-Remaining:
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              schema:
+                type: integer
 
   /attempts:
     post:
       summary: Start a new attempt for a user
       operationId: startAttempt
+      security:
+        - deviceAuth: []
       requestBody:
         required: true
         content:
@@ -178,11 +218,31 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many requests
+          headers:
+            X-RateLimit-Limit:
+              schema:
+                type: integer
+            X-RateLimit-Remaining:
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              schema:
+                type: integer
 
   /attempts/{attemptId}:
     get:
       summary: Get attempt details and progress
       operationId: getAttempt
+      security:
+        - deviceAuth: []
       parameters:
         - name: attemptId
           in: path
@@ -202,9 +262,17 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     patch:
       summary: End an attempt
       operationId: endAttempt
+      security:
+        - deviceAuth: []
       parameters:
         - name: attemptId
           in: path
@@ -224,11 +292,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /attempts/{attemptId}/stops_visited:
     post:
       summary: Mark a stop as visited (idempotent, supports offline sync)
       operationId: markStopVisited
+      security:
+        - deviceAuth: []
       parameters:
         - name: attemptId
           in: path
@@ -244,10 +320,10 @@ paths:
               properties:
                 stop_id:
                   type: integer
-                visitedat:
+                visited_at:
                   type: string
                   format: date-time
-              required: [stop_id, visitedat]
+              required: [stop_id, visited_at]
       responses:
         '201':
           description: Stop marked as visited
@@ -267,26 +343,63 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many requests
+          headers:
+            X-RateLimit-Limit:
+              schema:
+                type: integer
+            X-RateLimit-Remaining:
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              schema:
+                type: integer
     get:
       summary: Get all visited stops for an attempt
       operationId: getVisitedStops
+      security:
+        - deviceAuth: []
       parameters:
         - name: attemptId
           in: path
           required: true
           schema:
             type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
       responses:
         '200':
           description: List of visited stops
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/VisitedStop'
+                $ref: '#/components/schemas/PaginatedResponse'
         '404':
           description: Attempt not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -352,43 +465,103 @@ paths:
     get:
       summary: List all subway stops
       operationId: getStops
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
       responses:
         '200':
           description: List of stops
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Stop'
+                $ref: '#/components/schemas/PaginatedResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /routes:
     get:
       summary: List all subway routes
       operationId: getRoutes
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
       responses:
         '200':
           description: List of routes
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Route'
+                $ref: '#/components/schemas/PaginatedResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /transfers:
     get:
       summary: List all transfer connections
       operationId: getTransfers
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: page_size
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
       responses:
         '200':
           description: List of transfers
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Transfer'
+                $ref: '#/components/schemas/PaginatedResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
 
   /pathfinding/solve:
     post:
@@ -396,6 +569,8 @@ paths:
       operationId: solvePathfinding
       description: |
         Internal endpoint. Called by backend to compute optimal journey. Not exposed to frontend clients.
+      security:
+        - deviceAuth: []
       requestBody:
         required: true
         content:
@@ -424,6 +599,12 @@ paths:
                 $ref: '#/components/schemas/Journey'
         '400':
           description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
           content:
             application/json:
               schema:
