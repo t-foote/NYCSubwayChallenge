@@ -148,6 +148,28 @@ function Content({ visitedStops, loading }: { visitedStops: Array<{ id: string; 
               </View>
             </View>
 
+            <View className="bg-white rounded-xl shadow-sm mb-6 p-4">
+              <View className="flex-row justify-between items-center">
+                <View>
+                  <Text className="text-xl font-bold text-gray-800">
+                    Next Stop
+                  </Text>
+                  <Text className="text-gray-600 mt-1">
+                    {mockRoute.journey.segments[0].stops_in_segment[0]}
+                  </Text>
+                </View>
+                <TouchableOpacity 
+                  className="bg-blue-600 rounded-lg px-4 py-2"
+                  onPress={() => {
+                    // Will implement visit functionality later
+                    console.log('Marking stop as visited');
+                  }}
+                >
+                  <Text className="text-white font-semibold">Visited</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
             <TouchableOpacity 
               className="bg-white rounded-xl shadow-sm mb-6 p-4"
               onPress={() => setIsVisitedStopsModalVisible(true)}
