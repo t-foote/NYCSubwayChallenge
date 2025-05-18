@@ -1,4 +1,25 @@
 import { API_BASE_URL } from "./config";
+import { getDeviceId } from "../utils/deviceId";
+
+async function authenticatedFetch(endpoint: string, options: RequestInit = {}) {
+  const deviceId = getDeviceId();
+  const headers = {
+    "Content-Type": "application/json",
+    "X-Device-ID": deviceId,
+    ...options.headers,
+  };
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers,
+  });
+
+  if (!response.ok) {
+    throw new Error(`API request failed: ${response.statusText}`);
+  }
+
+  return response.json();
+}
 
 export async function registerUser(unique_device_identifier: string) {
   const res = await fetch(`${API_BASE_URL}/users`, {
@@ -19,15 +40,12 @@ export async function startAttempt(user_id: number) {
 }
 
 export async function markStopVisited(attemptId: number, stop_id: number, visitedat: string) {
-  const res = await fetch(`${API_BASE_URL}/attempts/${attemptId}/stops_visited`, {
+  return authenticatedFetch(`/attempts/${attemptId}/stops_visited`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ stop_id, visitedat }),
   });
-  return res.json();
 }
 
 export async function getVisitedStops(attemptId: number) {
-  const res = await fetch(`${API_BASE_URL}/attempts/${attemptId}/stops_visited`);
-  return res.json();
+  return authenticatedFetch(`/attempts/${attemptId}/stops_visited`);
 }
