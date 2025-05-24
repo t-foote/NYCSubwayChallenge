@@ -121,6 +121,20 @@ class Session:
         """Convert an MTA shape ID to a database shape PK."""
         return self.nyct_shape_id_to_shape_pk.get(nyct_shape_id)
     
+    def get_stop_name(self, nyct_stop_id: str) -> str:
+        """
+        Convert an MTA stop ID to its name.
+        Memoized to only do one database lookup.
+        """
+        if not hasattr(self, '_stop_id_to_name'):
+            # Load all stops into memory
+            response = self.supabase.table('stops').select('nyct_stop_id,stop_name').execute()
+            if hasattr(response, 'error') and response.error:
+                print(f"Error fetching stop names: {response.error}")
+                return None
+            self._stop_id_to_name = {row['nyct_stop_id']: row['stop_name'] for row in response.data}
+        return self._stop_id_to_name.get(nyct_stop_id)
+    
     def get_all_transfers_from_db_static_table(self) -> list[Transfer]:
         """Get all transfers from the database. Memoized."""
         if not hasattr(self, '_all_transfers'):
