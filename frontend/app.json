@@ -16,6 +16,9 @@
     ],
     "name": "NYC Subway Challenge",
     "slug": "frontend",
-    "jsEngine": "jsc"
+    "jsEngine": "jsc",
+    "extra": {
+      "apiBaseUrl": "http://10.0.0.116:3000"
+    }
   }
 }

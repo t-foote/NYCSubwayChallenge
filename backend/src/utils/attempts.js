@@ -7,23 +7,20 @@ const supabase = require('./db');
  */
 async function getCurrentAttemptId(deviceId) {
   try {
-    // First get the user ID from the device ID
+    // Get user ID from device ID
     const { data: user, error: userError } = await supabase
       .from('users')
       .select('id')
       .eq('unique_device_uuid', deviceId)
       .single();
 
-    if (userError) {
-      console.error('Error finding user:', userError);
-      return null;
-    }
-
+    if (userError) throw userError;
     if (!user) {
+      console.error(`No user found for device ID: ${deviceId}`);
       return null;
     }
 
-    // Then find the active attempt for this user
+    // Get current attempt
     const { data: attempt, error: attemptError } = await supabase
       .from('attempts')
       .select('id')
@@ -31,15 +28,18 @@ async function getCurrentAttemptId(deviceId) {
       .is('ended_at', null)
       .single();
 
-    if (attemptError && attemptError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
-      console.error('Error finding attempt:', attemptError);
-      return null;
+    if (attemptError) {
+      if (attemptError.code === 'PGRST116') {
+        console.error(`No active attempt found for device ID: ${deviceId} (user ID: ${user.id})`);
+      } else {
+        throw attemptError;
+      }
     }
 
     return attempt?.id || null;
-  } catch (error) {
-    console.error('Error in getCurrentAttemptId:', error);
-    return null;
+  } catch (err) {
+    console.error('Error getting current attempt ID:', err);
+    throw err;
   }
 }
 

@@ -2,29 +2,89 @@ import { Link } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { Text, View, TouchableOpacity, FlatList, Modal } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { getVisitedStops, syncPendingStops } from "../sqlite/visitedStops";
 import { Ionicons } from "@expo/vector-icons";
+import { getVisitedStops, markStopVisited, getCurrentAttempt, startAttempt, endAttempt } from "../api";
+
+interface VisitedStop {
+  id: string;
+  name: string;
+  time: string;
+  pending: boolean;
+}
+
+interface CurrentAttempt {
+  id: string;
+  started_at: string;
+  status: 'active' | 'completed';
+}
 
 export default function Page() {
-  const [visitedStops, setVisitedStops] = useState<Array<{ id: string; name: string; time: string; pending: boolean }>>([]);
+  const [visitedStops, setVisitedStops] = useState<VisitedStop[]>([]);
+  const [currentAttempt, setCurrentAttempt] = useState<CurrentAttempt | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadStops();
-    const interval = setInterval(() => {
-      syncPendingStops().then(loadStops);
-    }, 10000); // Try syncing every 10s
+    loadData();
+    const interval = setInterval(loadData, 10000); // Refresh every 10s
     return () => clearInterval(interval);
   }, []);
 
-  async function loadStops() {
+  async function loadData() {
     setLoading(true);
-    console.log('loadStops: starting load');
-    const stops = await getVisitedStops();
-    console.log('loadStops: got stops', stops);
-    setVisitedStops(stops);
-    setLoading(false);
-    console.log('loadStops: finished');
+    setError(null);
+    try {
+      // Load current attempt
+      const attempt = await getCurrentAttempt();
+      setCurrentAttempt(attempt);
+
+      // Only load visited stops if there's an active attempt
+      if (attempt) {
+        const stops = await getVisitedStops();
+        setVisitedStops(stops);
+      } else {
+        setVisitedStops([]);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      setError('Unable to connect to the server. Please check your internet connection.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleStartAttempt() {
+    setError(null);
+    try {
+      const attempt = await startAttempt();
+      setCurrentAttempt(attempt);
+    } catch (error) {
+      console.error('Error starting attempt:', error);
+      setError('Failed to start attempt. Please try again.');
+    }
+  }
+
+  async function handleEndAttempt() {
+    setError(null);
+    try {
+      await endAttempt();
+      setCurrentAttempt(null);
+    } catch (error) {
+      console.error('Error ending attempt:', error);
+      setError('Failed to end attempt. Please try again.');
+    }
+  }
+
+  async function handleMarkStopVisited(stopId: string) {
+    setError(null);
+    try {
+      const visitedAt = new Date().toISOString();
+      await markStopVisited(stopId, visitedAt);
+      await loadData(); // Refresh data after marking stop
+    } catch (error) {
+      console.error('Error marking stop visited:', error);
+      setError('Failed to mark stop as visited. Please try again.');
+    }
   }
 
   return (
@@ -33,15 +93,43 @@ export default function Page() {
         <View className="flex-1 justify-center items-center">
           <Text>Loading...</Text>
         </View>
+      ) : error ? (
+        <View className="flex-1 justify-center items-center p-4">
+          <Text className="text-red-500 text-center mb-4">{error}</Text>
+          <TouchableOpacity 
+            className="bg-blue-600 rounded-lg px-4 py-2"
+            onPress={loadData}
+          >
+            <Text className="text-white font-semibold">Retry</Text>
+          </TouchableOpacity>
+        </View>
       ) : (
-        <Content visitedStops={visitedStops} loading={loading} />
+        <Content 
+          visitedStops={visitedStops} 
+          currentAttempt={currentAttempt}
+          onStartAttempt={handleStartAttempt}
+          onEndAttempt={handleEndAttempt}
+          onMarkStopVisited={handleMarkStopVisited}
+        />
       )}
       <Footer />
     </View>
   );
 }
 
-function Content({ visitedStops, loading }: { visitedStops: Array<{ id: string; name: string; time: string; pending: boolean }>; loading: boolean }) {
+function Content({ 
+  visitedStops, 
+  currentAttempt,
+  onStartAttempt,
+  onEndAttempt,
+  onMarkStopVisited
+}: { 
+  visitedStops: VisitedStop[];
+  currentAttempt: CurrentAttempt | null;
+  onStartAttempt: () => Promise<void>;
+  onEndAttempt: () => Promise<void>;
+  onMarkStopVisited: (stopId: string) => Promise<void>;
+}) {
   const insets = useSafeAreaInsets();
   const [isVisitedStopsModalVisible, setIsVisitedStopsModalVisible] = useState(false);
   const [isRouteModalVisible, setIsRouteModalVisible] = useState(false);
@@ -70,7 +158,7 @@ function Content({ visitedStops, loading }: { visitedStops: Array<{ id: string; 
     remaining_stops: ["456B", "789C", "101D"]
   };
 
-  const renderVisitedStop = ({ item }: { item: { id: string; name: string; time: string; pending: boolean } }) => (
+  const renderVisitedStop = ({ item }: { item: VisitedStop }) => (
     <View className="bg-white rounded-xl py-4 px-5 mb-3 flex-row justify-between items-center shadow-sm">
       <Text className="text-base font-semibold text-gray-800 flex-1">
         {item.name}
@@ -133,7 +221,7 @@ function Content({ visitedStops, loading }: { visitedStops: Array<{ id: string; 
 
             <View className="bg-white rounded-2xl p-5 mb-6 shadow-sm">
               <Text className="text-lg font-semibold mb-3 text-gray-800">
-                Trip in Progress
+                {currentAttempt ? 'Trip in Progress' : 'No Active Trip'}
               </Text>
               <View className="flex-row justify-between">
                 <Text className="text-gray-600">
@@ -142,63 +230,83 @@ function Content({ visitedStops, loading }: { visitedStops: Array<{ id: string; 
                 <Text className="text-gray-600">
                   <Text className="font-bold text-gray-800">470</Text> Stops Left
                 </Text>
-                <Text className="text-gray-600">
-                  <Text className="font-bold text-gray-800">00:12</Text> Elapsed
-                </Text>
+                {currentAttempt && (
+                  <Text className="text-gray-600">
+                    <Text className="font-bold text-gray-800">
+                      {new Date(currentAttempt.started_at).toLocaleTimeString()}
+                    </Text> Started
+                  </Text>
+                )}
               </View>
-            </View>
-
-            <View className="bg-white rounded-xl shadow-sm mb-6 p-4">
-              <View className="flex-row justify-between items-center">
-                <View>
-                  <Text className="text-xl font-bold text-gray-800">
-                    Next Stop
-                  </Text>
-                  <Text className="text-gray-600 mt-1">
-                    {mockRoute.journey.segments[0].stops_in_segment[0]}
-                  </Text>
-                </View>
+              {!currentAttempt ? (
                 <TouchableOpacity 
-                  className="bg-blue-600 rounded-lg px-4 py-2"
-                  onPress={() => {
-                    // Will implement visit functionality later
-                    console.log('Marking stop as visited');
-                  }}
+                  className="bg-blue-600 rounded-lg px-4 py-2 mt-4 self-start"
+                  onPress={onStartAttempt}
                 >
-                  <Text className="text-white font-semibold">Visited</Text>
+                  <Text className="text-white font-semibold">Start New Trip</Text>
                 </TouchableOpacity>
-              </View>
+              ) : (
+                <TouchableOpacity 
+                  className="bg-red-600 rounded-lg px-4 py-2 mt-4 self-start"
+                  onPress={onEndAttempt}
+                >
+                  <Text className="text-white font-semibold">End Trip</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
-            <TouchableOpacity 
-              className="bg-white rounded-xl shadow-sm mb-6 p-4"
-              onPress={() => setIsVisitedStopsModalVisible(true)}
-            >
-              <View className="flex-row justify-between items-center">
-                <Text className="text-xl font-bold text-gray-800">
-                  Visited Stops
-                </Text>
-                <Ionicons name="chevron-forward" size={24} color="#6B7280" />
-              </View>
-              <Text className="text-gray-600 mt-1">
-                {visitedStops.length} stops visited
-              </Text>
-            </TouchableOpacity>
+            {currentAttempt && (
+              <>
+                <View className="bg-white rounded-xl p-4 mb-6 shadow-sm">
+                  <View className="flex-row justify-between items-center">
+                    <View>
+                      <Text className="text-xl font-bold text-gray-800">
+                        Next Stop
+                      </Text>
+                      <Text className="text-gray-600 mt-1">
+                        {mockRoute.journey.segments[0].stops_in_segment[0]}
+                      </Text>
+                    </View>
+                    <TouchableOpacity 
+                      className="bg-blue-600 rounded-lg px-4 py-2"
+                      onPress={() => onMarkStopVisited(mockRoute.journey.segments[0].stops_in_segment[0])}
+                    >
+                      <Text className="text-white font-semibold">Visited</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
 
-            <TouchableOpacity 
-              className="bg-white rounded-xl shadow-sm mb-6 p-4"
-              onPress={() => setIsRouteModalVisible(true)}
-            >
-              <View className="flex-row justify-between items-center">
-                <Text className="text-xl font-bold text-gray-800">
-                  Route
-                </Text>
-                <Ionicons name="chevron-forward" size={24} color="#6B7280" />
-              </View>
-              <Text className="text-gray-600 mt-1">
-                {mockRoute.journey.segments.length} segments • {Math.round(mockRoute.total_estimated_time / 60)} min
-              </Text>
-            </TouchableOpacity>
+                <TouchableOpacity 
+                  className="bg-white rounded-xl shadow-sm mb-6 p-4"
+                  onPress={() => setIsVisitedStopsModalVisible(true)}
+                >
+                  <View className="flex-row justify-between items-center">
+                    <Text className="text-xl font-bold text-gray-800">
+                      Visited Stops
+                    </Text>
+                    <Ionicons name="chevron-forward" size={24} color="#6B7280" />
+                  </View>
+                  <Text className="text-gray-600 mt-1">
+                    {visitedStops.length} stops visited
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  className="bg-white rounded-xl shadow-sm mb-6 p-4"
+                  onPress={() => setIsRouteModalVisible(true)}
+                >
+                  <View className="flex-row justify-between items-center">
+                    <Text className="text-xl font-bold text-gray-800">
+                      Route
+                    </Text>
+                    <Ionicons name="chevron-forward" size={24} color="#6B7280" />
+                  </View>
+                  <Text className="text-gray-600 mt-1">
+                    {mockRoute.journey.segments.length} segments • {Math.round(mockRoute.total_estimated_time / 60)} min
+                  </Text>
+                </TouchableOpacity>
+              </>
+            )}
           </>
         }
       />
