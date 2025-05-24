@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const supabase = require('../utils/db');
+const { getCurrentAttemptId } = require('../utils/attempts');
 
 // POST /attempts
 router.post('/', async (req, res) => {
@@ -22,19 +23,26 @@ router.post('/', async (req, res) => {
   }
 });
 
-// GET /attempts/:attemptId
-router.get('/:attemptId', async (req, res) => {
-  const { attemptId } = req.params;
+// GET /attempts/current
+router.get('/current', async (req, res) => {
+  const deviceId = req.headers['x-device-id'];
+  if (!deviceId) {
+    return res.status(401).json({ error: 'Device ID required' });
+  }
+
   try {
+    const attemptId = await getCurrentAttemptId(deviceId);
+    if (!attemptId) {
+      return res.status(404).json({ error: 'No active attempt found' });
+    }
+
     const { data, error } = await supabase
       .from('attempts')
       .select('*')
       .eq('id', attemptId)
-      .maybeSingle();
+      .single();
+
     if (error) throw error;
-    if (!data) {
-      return res.status(404).json({ error: 'Attempt not found' });
-    }
     return res.status(200).json(data);
   } catch (err) {
     console.error(err);
@@ -42,20 +50,27 @@ router.get('/:attemptId', async (req, res) => {
   }
 });
 
-// PATCH /attempts/:attemptId
-router.patch('/:attemptId', async (req, res) => {
-  const { attemptId } = req.params;
+// PATCH /attempts/current
+router.patch('/current', async (req, res) => {
+  const deviceId = req.headers['x-device-id'];
+  if (!deviceId) {
+    return res.status(401).json({ error: 'Device ID required' });
+  }
+
   try {
+    const attemptId = await getCurrentAttemptId(deviceId);
+    if (!attemptId) {
+      return res.status(404).json({ error: 'No active attempt found' });
+    }
+
     const { data, error } = await supabase
       .from('attempts')
       .update({ ended_at: new Date().toISOString() })
       .eq('id', attemptId)
       .select()
-      .maybeSingle();
+      .single();
+
     if (error) throw error;
-    if (!data) {
-      return res.status(404).json({ error: 'Attempt not found' });
-    }
     return res.status(200).json(data);
   } catch (err) {
     console.error(err);

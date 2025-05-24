@@ -237,27 +237,21 @@ paths:
               schema:
                 type: integer
 
-  /attempts/{attemptId}:
+  /attempts/current:
     get:
-      summary: Get attempt details and progress
-      operationId: getAttempt
+      summary: Get current attempt details and progress
+      operationId: getCurrentAttempt
       security:
         - deviceAuth: []
-      parameters:
-        - name: attemptId
-          in: path
-          required: true
-          schema:
-            type: integer
       responses:
         '200':
-          description: Attempt details
+          description: Current attempt details
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/Attempt'
         '404':
-          description: Attempt not found
+          description: No active attempt found
           content:
             application/json:
               schema:
@@ -269,16 +263,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
     patch:
-      summary: End an attempt
-      operationId: endAttempt
+      summary: End current attempt
+      operationId: endCurrentAttempt
       security:
         - deviceAuth: []
-      parameters:
-        - name: attemptId
-          in: path
-          required: true
-          schema:
-            type: integer
       responses:
         '200':
           description: Attempt ended
@@ -287,7 +275,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Attempt'
         '404':
-          description: Attempt not found
+          description: No active attempt found
           content:
             application/json:
               schema:
@@ -299,18 +287,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /attempts/{attemptId}/stops_visited:
+  /attempts/current/stops_visited:
     post:
       summary: Mark a stop as visited (idempotent, supports offline sync)
       operationId: markStopVisited
       security:
         - deviceAuth: []
-      parameters:
-        - name: attemptId
-          in: path
-          required: true
-          schema:
-            type: integer
       requestBody:
         required: true
         content:
@@ -349,6 +331,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '404':
+          description: No active attempt found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
         '429':
           description: Too many requests
           headers:
@@ -362,16 +350,11 @@ paths:
               schema:
                 type: integer
     get:
-      summary: Get all visited stops for an attempt
+      summary: Get all visited stops for current attempt
       operationId: getVisitedStops
       security:
         - deviceAuth: []
       parameters:
-        - name: attemptId
-          in: path
-          required: true
-          schema:
-            type: integer
         - name: page
           in: query
           schema:
@@ -393,7 +376,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/PaginatedResponse'
         '404':
-          description: Attempt not found
+          description: No active attempt found
           content:
             application/json:
               schema:
@@ -405,16 +388,12 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
 
-  /attempts/{attemptId}/journey:
+  /attempts/current/journey:
     post:
       summary: Request (re)generation of the optimal journey (calls pathfinding service)
       operationId: generateJourney
-      parameters:
-        - name: attemptId
-          in: path
-          required: true
-          schema:
-            type: integer
+      security:
+        - deviceAuth: []
       requestBody:
         content:
           application/json:
@@ -438,15 +417,23 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '404':
+          description: No active attempt found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
     get:
       summary: Get the current journey (list of segments)
       operationId: getJourney
-      parameters:
-        - name: attemptId
-          in: path
-          required: true
-          schema:
-            type: integer
+      security:
+        - deviceAuth: []
       responses:
         '200':
           description: Current journey
@@ -455,7 +442,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Journey'
         '404':
-          description: Journey not found
+          description: Journey not found or no active attempt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          description: Unauthorized
           content:
             application/json:
               schema:
@@ -608,47 +601,4 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
-
-  /users/{deviceId}/current-attempt:
-    get:
-      summary: Get the current active attempt for a user
-      operationId: getCurrentAttempt
-      security:
-        - deviceAuth: []
-      parameters:
-        - name: deviceId
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Current attempt details or null if no active attempt
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  attempt_id:
-                    type: integer
-                    nullable: true
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Error'
-        '429':
-          description: Too many requests
-          headers:
-            X-RateLimit-Limit:
-              schema:
-                type: integer
-            X-RateLimit-Remaining:
-              schema:
-                type: integer
-            X-RateLimit-Reset:
-              schema:
-                type: integer 
+                $ref: '#/components/schemas/Error' 
