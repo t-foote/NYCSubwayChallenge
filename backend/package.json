@@ -16,9 +16,11 @@
     "@supabase/supabase-js": "^2.49.4",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
-    "pg": "^8.15.6",
+    "pg": "^8.16.0",
     "postgres": "^3.4.5",
-    "supabase": "^2.22.12"
+    "reflect-metadata": "^0.2.2",
+    "supabase": "^2.22.12",
+    "typeorm": "^0.3.24"
   },
   "devDependencies": {
     "ts-node": "^10.9.2"
