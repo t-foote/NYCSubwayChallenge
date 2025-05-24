@@ -608,4 +608,47 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error' 
+                $ref: '#/components/schemas/Error'
+
+  /users/{deviceId}/current-attempt:
+    get:
+      summary: Get the current active attempt for a user
+      operationId: getCurrentAttempt
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Current attempt details or null if no active attempt
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  attempt_id:
+                    type: integer
+                    nullable: true
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many requests
+          headers:
+            X-RateLimit-Limit:
+              schema:
+                type: integer
+            X-RateLimit-Remaining:
+              schema:
+                type: integer
+            X-RateLimit-Reset:
+              schema:
+                type: integer 
