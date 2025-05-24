@@ -1,6 +1,9 @@
 from fastapi import FastAPI, HTTPException
-from typing import List, Optional
 from pydantic import BaseModel
+from typing import List, Optional
+from datetime import datetime
+from main import get_optimal_journey
+from utils import MtaTrip, Transfer
 import uvicorn
 
 app = FastAPI(
@@ -9,56 +12,84 @@ app = FastAPI(
     version="1.0.0",
 )
 
-class Segment(BaseModel):
+class TransferModel(BaseModel):
     start_stop_id: str
     end_stop_id: str
-    route_id: str
-    estimated_time: int
-    stops_in_segment: List[str]
+    transfer_time_min: int
+    is_walking: bool
 
-class Journey(BaseModel):
-    segments: List[Segment]
+class MtaTripModel(BaseModel):
+    route_id: str
+    trip_id: str
+    shape_id: str
+    service_type: str
+
+class SegmentModel(BaseModel):
+    start_stop_id: str
+    end_stop_id: str
+    mta_trip: MtaTripModel
+    all_stops_visited: List[str]
+
+class JourneyModel(BaseModel):
+    segments: List[SegmentModel]
+    transfers: List[TransferModel]
 
 class RouteResponse(BaseModel):
-    journey: Journey
-    total_estimated_time: int
-    remaining_stops: List[str]
+    journey: JourneyModel
+    total_travel_time: int
 
 @app.get("/calculate-route", response_model=RouteResponse)
 async def calculate_route(
-    visited_stops: str,
-    current_stop: str,
+    stop_ids_already_visited: Optional[str] = None
 ):
     """
-    Calculate the optimal route to visit all remaining stops.
+    Calculate the optimal journey to complete the NYC Subway Challenge.
     
     Args:
-        visited_stops: Comma-separated list of stop IDs that have been visited
-        current_stop: The stop ID where the user currently is
+        stop_ids_already_visited: Comma-separated list of stop IDs that have been visited
     
     Returns:
-        RouteResponse: The calculated route with segments and timing information
+        RouteResponse: The calculated journey with segments and timing information
     """
     try:
-        # Parse visited stops from comma-separated string
-        visited_stops_list = [stop.strip() for stop in visited_stops.split(",")]
+        # Convert comma-separated string to list if provided
+        visited_stops = stop_ids_already_visited.split(',') if stop_ids_already_visited else []
         
-        # TODO: Implement pathfinding algorithm
-        # For now, just echo back the input in the expected format
-        mock_segment = Segment(
-            start_stop_id=current_stop,
-            end_stop_id="456B",  # Example stop
-            route_id="A",        # Example route
-            estimated_time=300,   # Example time in seconds
-            stops_in_segment=["123A", "124B", "125C", "456B"]  # Example stops
-        )
+        # Get the optimal journey
+        journey = get_optimal_journey(visited_stops)
         
-        mock_journey = Journey(segments=[mock_segment])
+        # Convert journey to response model
+        segments = [
+            SegmentModel(
+                start_stop_id=segment.start_stop_id,
+                end_stop_id=segment.end_stop_id,
+                mta_trip=MtaTripModel(
+                    route_id=segment.mta_trip.route_id,
+                    trip_id=segment.mta_trip.trip_id,
+                    shape_id=segment.mta_trip.shape_id,
+                    service_type=str(segment.mta_trip._service_type)
+                ),
+                all_stops_visited=segment.all_stops_visited
+            )
+            for segment in journey.segments
+        ]
+        
+        transfers = [
+            TransferModel(
+                start_stop_id=transfer.start_stop_id,
+                end_stop_id=transfer.end_stop_id,
+                transfer_time_min=transfer.transfer_time_min,
+                is_walking=transfer.is_walking
+            )
+            for transfer in journey.transfers
+        ]
         
         return RouteResponse(
-            journey=mock_journey,
-            total_estimated_time=1800,  # Example total time
-            remaining_stops=["456B", "789C", "101D"]  # Example remaining stops
+            journey=JourneyModel(
+                segments=segments,
+                transfers=transfers
+            ),
+            total_travel_time=journey.get_total_travel_time()
         )
         
     except Exception as e:

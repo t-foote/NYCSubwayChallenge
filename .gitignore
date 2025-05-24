@@ -6,3 +6,5 @@ specs.md
 
 static/scripts/csv_out/*
 .DS_Store
+
+pathfinder/__*
