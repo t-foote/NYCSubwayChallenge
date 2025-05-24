@@ -2,8 +2,8 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
-from main import get_optimal_journey
 from utils import MtaTrip, Transfer
+from algo import get_optimal_journey
 import uvicorn
 
 app = FastAPI(
@@ -11,12 +11,6 @@ app = FastAPI(
     description="Microservice for calculating optimal routes between subway stops",
     version="1.0.0",
 )
-
-class TransferModel(BaseModel):
-    start_stop_id: str
-    end_stop_id: str
-    transfer_time_min: int
-    is_walking: bool
 
 class MtaTripModel(BaseModel):
     route_id: str
@@ -32,11 +26,11 @@ class SegmentModel(BaseModel):
 
 class JourneyModel(BaseModel):
     segments: List[SegmentModel]
-    transfers: List[TransferModel]
 
 class RouteResponse(BaseModel):
-    journey: JourneyModel
-    total_travel_time: int
+    """Response model for the /calculate-route endpoint."""
+    segments: list[SegmentModel]
+    total_travel_time: Optional[int] = None  # Make this optional with a default of None
 
 @app.get("/calculate-route", response_model=RouteResponse)
 async def calculate_route(
@@ -54,9 +48,14 @@ async def calculate_route(
     try:
         # Convert comma-separated string to list if provided
         visited_stops = stop_ids_already_visited.split(',') if stop_ids_already_visited else []
+        print(f"Calculating route with visited stops: {visited_stops}")
         
         # Get the optimal journey
         journey = get_optimal_journey(visited_stops)
+        if not journey.segments:
+            raise ValueError("No segments found in journey")
+            
+        print(f"Generated journey with {len(journey.segments)} segments")
         
         # Convert journey to response model
         segments = [
@@ -74,26 +73,27 @@ async def calculate_route(
             for segment in journey.segments
         ]
         
-        transfers = [
-            TransferModel(
-                start_stop_id=transfer.start_stop_id,
-                end_stop_id=transfer.end_stop_id,
-                transfer_time_min=transfer.transfer_time_min,
-                is_walking=transfer.is_walking
-            )
-            for transfer in journey.transfers
-        ]
-        
-        return RouteResponse(
-            journey=JourneyModel(
-                segments=segments,
-                transfers=transfers
-            ),
-            total_travel_time=journey.get_total_travel_time()
+        # Calculate total travel time
+        total_time = journey.get_total_travel_time()
+        if total_time is None:
+            raise ValueError("Could not calculate total travel time")
+            
+        response = RouteResponse(
+            segments=segments,
+            total_travel_time=total_time
         )
+        print(f"Returning response: {response.model_dump_json()}")
+        return response
         
+    except ValueError as e:
+        print(f"Validation error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        print(f"Error calculating route: {str(e)}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=True)
+    uvicorn.run("api:app", host="0.0.0.0", port=8001, reload=True)

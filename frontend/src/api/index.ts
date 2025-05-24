@@ -104,6 +104,12 @@ export async function startAttempt() {
     });
     
     console.log('Attempt created successfully:', attempt);
+
+    // Get the initial journey for this attempt
+    console.log('Fetching initial journey...');
+    const journey = await authenticatedFetch('/attempts/current/journey');
+    console.log('Initial journey fetched:', journey);
+    
     return attempt;
   } catch (error) {
     console.error('Error starting attempt:', {

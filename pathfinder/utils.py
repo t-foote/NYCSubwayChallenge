@@ -162,13 +162,25 @@ class Session:
         session = Session()
         stop_pk = session.get_stop_pk(stop_id)
         trip_pk = session.get_trip_pk(trip_id)
+        
+        # Check if we found valid primary keys
+        if stop_pk is None:
+            print(f"Warning: Could not find database PK for stop ID: {stop_id}")
+            return None
+        if trip_pk is None:
+            print(f"Warning: Could not find database PK for trip ID: {trip_id}")
+            return None
+            
         response = session.supabase.table('trip_stop_times_scheduled')\
             .select('dep_time,dep_time_is_next_day')\
             .eq('stop_id', stop_pk)\
             .eq('trip_id', trip_pk)\
             .execute()
+            
         if not response.data:
+            print(f"Warning: No departure time found for stop {stop_id} and trip {trip_id}")
             return None
+            
         time_data = response.data[0]
         # Create a datetime object for today with the time from the database
         today = datetime.now().date()
@@ -184,19 +196,28 @@ class Session:
             self._all_stops = [row['nyct_stop_id'] for row in response.data]
         return self._all_stops
 
+    def is_valid_stop_id(self, nyct_stop_id: str) -> bool:
+        """Return True if the stop id exists in the stops table."""
+        return nyct_stop_id in self.nyct_id_to_stop_pk
+
 
 
 def format_station_id(station_id: str) -> str:
     """Format a station ID to the standard format."""
-    # Remove N/S suffix if present
-    if station_id.endswith('S') or station_id.endswith('N'):
-        station_id = station_id[:-1]
-    
-    # Validate format: must be exactly 3 digits
-    if not (len(station_id) == 3 and station_id.isdigit()):
-        raise ValueError(f"Invalid station id: {station_id}")
-    
-    return station_id
+    try:
+        # Remove N/S suffix if present
+        if station_id.endswith('S') or station_id.endswith('N'):
+            station_id = station_id[:-1]
+        
+        # Validate format: must be exactly 3 digits
+        if not (len(station_id) == 3 and station_id.isdigit()):
+            print(f"Warning: Invalid station id format: {station_id}")
+            return station_id  # Return original ID instead of raising error
+        
+        return station_id
+    except Exception as e:
+        print(f"Warning: Error formatting station id {station_id}: {str(e)}")
+        return station_id  # Return original ID on any error
 
 
 
@@ -256,15 +277,31 @@ class Segment:
         self.start_stop_id = start_stop_id
         self.end_stop_id = end_stop_id
         self.mta_trip = mta_trip
-        self.all_stops_visited: list[str]  # List of MTA stop IDs
+        self.all_stops_visited: list[str]  # List of MTA stop IDs that the user will visit
+        
         # Figure out self.all_stops_visited:
-        if self.is_realtime:
-            all_stops = [stu.stop_id for stu in self.mta_trip.stop_time_updates]
+        if isinstance(self.mta_trip, RealtimeMtaTrip):
+            # Get all stops from the trip
+            all_stops = [format_station_id(stu.stop_id) for stu in self.mta_trip.stop_time_updates]
+            print(f"All stops from trip: {all_stops}")
+            
+            # Validate that our start and end stops are in the trip
+            if self.start_stop_id not in all_stops:
+                raise ValueError(f"Start stop {self.start_stop_id} not found in trip")
+            if self.end_stop_id not in all_stops:
+                raise ValueError(f"End stop {self.end_stop_id} not found in trip")
+                
+            # Get the stops between start and end
             start_idx = all_stops.index(self.start_stop_id)
             end_idx = all_stops.index(self.end_stop_id)
+            if start_idx > end_idx:
+                raise ValueError(f"Start stop {self.start_stop_id} comes after end stop {self.end_stop_id} in trip")
+                
             self.all_stops_visited = all_stops[start_idx:end_idx + 1]
         else:
             self.all_stops_visited = self._get_scheduled_stops()
+            if not self.all_stops_visited:
+                raise ValueError(f"Could not get scheduled stops for trip {self.mta_trip.trip_id}")
 
     @property
     def is_realtime(self) -> bool:
@@ -296,11 +333,13 @@ class Segment:
                 print(f"Could not find database PKs for stops {self.start_stop_id} or {self.end_stop_id}")
                 return []
 
+            # Get the trip's stop sequence
             response = session.supabase.table('trip_stop_times_scheduled')\
                 .select('stop_id,sequence_number')\
-                .eq('trip_id', self.mta_trip.trip_id)\
+                .eq('trip_id', session.get_trip_pk(self.mta_trip.trip_id))\
                 .order('sequence_number')\
                 .execute()
+            
             if hasattr(response, 'error') and response.error:
                 print(f"Error fetching scheduled stops: {response.error}")
                 return []
@@ -308,12 +347,14 @@ class Segment:
             stops = response.data
             start_idx = next((i for i, s in enumerate(stops) if s['stop_id'] == start_stop_pk), None)
             end_idx = next((i for i, s in enumerate(stops) if s['stop_id'] == end_stop_pk), None)
+            
             if start_idx is None or end_idx is None:
                 print(f"Could not find start or end stop in trip {self.mta_trip.trip_id}")
                 return []
             
             # Convert database stop IDs back to MTA stop IDs
             return [session.get_stop_id(s['stop_id']) for s in stops[start_idx:end_idx + 1]]
+            
         except Exception as e:
             print(f"Error in _get_scheduled_stops: {e}")
             return []
@@ -321,24 +362,47 @@ class Segment:
 
 class Journey:
     """
-    A journey is a list alternating between segments and transfers.
+    A journey is a list of segments.
     """
-    def __init__(self, first_segment: Segment) -> None:
-        self.segments = [first_segment]
-        self.transfers = []
+    def __init__(self) -> None:
+        self.segments: list[Segment] = []
 
-    def add_transfer_and_segment(self, transfer: Transfer, segment: Segment) -> None:
-        self.transfers.append(transfer)
+    def add_segment(self, segment: Segment) -> None:
         self.segments.append(segment)
         
     def get_total_travel_time(self) -> int:
         """
         Get the total travel time of the journey in minutes.
+        Returns None if the travel time cannot be determined.
         """
-        raise NotImplementedError
+        if not self.segments:
+            print("Warning: Cannot calculate travel time for empty journey")
+            return None
+            
+        start_time = self.segments[0].boarding_time()
+        if start_time is None:
+            print(f"Warning: Could not determine boarding time for first segment")
+            return None
+            
+        end_time = self.segments[-1].disembarking_time()
+        if end_time is None:
+            print(f"Warning: Could not determine disembarking time for last segment")
+            return None
+            
+        return (end_time - start_time).total_seconds() // 60
     
-    
-    
+    @staticmethod
+    def filter_segments_with_known_stops(segments, session):
+        filtered = []
+        for seg in segments:
+            if session.is_valid_stop_id(seg.start_stop_id) and session.is_valid_stop_id(seg.end_stop_id):
+                filtered.append(seg)
+            else:
+                print(f"Skipping segment with unknown stop id: {seg.start_stop_id} -> {seg.end_stop_id}")
+        return filtered
+
+
+
 def get_all_trips_today() -> list[MtaTrip]:
     """
     Returns a list of MtaTrip and RealtimeMtaTrip objects.
@@ -357,12 +421,13 @@ def get_all_trips_today() -> list[MtaTrip]:
         print(f"Error fetching scheduled trips: {response.error}")
     else:
         for trip in response.data:
-            trips_by_id[trip['nyct_trip_id']] = MtaTrip(
-                route_id=session.get_route_id(trip['route_id']),
-                trip_id=trip['nyct_trip_id'],
-                shape_id=session.get_shape_id(trip['shape_id']),
-                service_type=ServiceType(trip['service_id'])
-            )
+            if trip['service_id'] == get_todays_service_type().value:
+                trips_by_id[trip['nyct_trip_id']] = MtaTrip(
+                    route_id=session.get_route_id(trip['route_id']),
+                    trip_id=trip['nyct_trip_id'],
+                    shape_id=session.get_shape_id(trip['shape_id']),
+                    service_type=ServiceType(trip['service_id'])
+                )
     # Override with realtime trips
     for char in ONE_OF_EACH_SUBWAY_API:
         feed = nyct.NYCTFeed(char)
