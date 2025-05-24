@@ -1,6 +1,6 @@
 import { Link } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { Text, View, TouchableOpacity, FlatList, Modal } from "react-native";
+import { Text, View, TouchableOpacity, FlatList, Modal, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { getVisitedStops, markStopVisited, getCurrentAttempt, startAttempt, endAttempt } from "../api";
@@ -22,12 +22,11 @@ export default function Page() {
   const [visitedStops, setVisitedStops] = useState<VisitedStop[]>([]);
   const [currentAttempt, setCurrentAttempt] = useState<CurrentAttempt | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 10000); // Refresh every 10s
-    return () => clearInterval(interval);
   }, []);
 
   async function loadData() {
@@ -50,8 +49,14 @@ export default function Page() {
       setError('Unable to connect to the server. Please check your internet connection.');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   }
+
+  const onRefresh = React.useCallback(() => {
+    setRefreshing(true);
+    loadData();
+  }, []);
 
   async function handleStartAttempt() {
     setError(null);
@@ -89,7 +94,7 @@ export default function Page() {
 
   return (
     <View className="flex flex-1">
-      {loading ? (
+      {loading && !refreshing ? (
         <View className="flex-1 justify-center items-center">
           <Text>Loading...</Text>
         </View>
@@ -110,6 +115,8 @@ export default function Page() {
           onStartAttempt={handleStartAttempt}
           onEndAttempt={handleEndAttempt}
           onMarkStopVisited={handleMarkStopVisited}
+          onRefresh={onRefresh}
+          refreshing={refreshing}
         />
       )}
       <Footer />
@@ -122,13 +129,17 @@ function Content({
   currentAttempt,
   onStartAttempt,
   onEndAttempt,
-  onMarkStopVisited
+  onMarkStopVisited,
+  onRefresh,
+  refreshing
 }: { 
   visitedStops: VisitedStop[];
   currentAttempt: CurrentAttempt | null;
   onStartAttempt: () => Promise<void>;
   onEndAttempt: () => Promise<void>;
   onMarkStopVisited: (stopId: string) => Promise<void>;
+  onRefresh: () => void;
+  refreshing: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const [isVisitedStopsModalVisible, setIsVisitedStopsModalVisible] = useState(false);
@@ -213,6 +224,14 @@ function Content({
         keyExtractor={item => item.id}
         renderItem={() => null}
         contentContainerStyle={{ paddingBottom: 32, paddingHorizontal: 20 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={['#2563eb']} // blue-600
+            tintColor="#2563eb"
+          />
+        }
         ListHeaderComponent={
           <>
             <Text className="text-3xl font-bold mt-4 mb-4 text-gray-800">
