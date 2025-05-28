@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import { Text, View, TouchableOpacity, FlatList, Modal, RefreshControl } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { getVisitedStops, markStopVisited, getCurrentAttempt, startAttempt, endAttempt } from "../api";
+import { getVisitedStops, markStopVisited, getCurrentAttempt, startAttempt, endAttempt, getJourney } from "../api";
 
 interface VisitedStop {
   id: string;
@@ -149,30 +149,37 @@ function Content({
   const insets = useSafeAreaInsets();
   const [isVisitedStopsModalVisible, setIsVisitedStopsModalVisible] = useState(false);
   const [isRouteModalVisible, setIsRouteModalVisible] = useState(false);
+  const [journey, setJourney] = useState<{
+    segments: Array<{
+      start_stop_id: string;
+      end_stop_id: string;
+      mta_trip: {
+        route_id: string;
+        trip_id: string;
+        shape_id: string;
+        service_type: string;
+      };
+      all_stops_visited: string[];
+    }>;
+    total_travel_time: number;
+  } | null>(null);
 
-  // Mock route data - will be replaced with actual API call later
-  const mockRoute = {
-    journey: {
-      segments: [
-        {
-          start_stop_id: "123A",
-          end_stop_id: "456B",
-          route_id: "A",
-          estimated_time: 300,
-          stops_in_segment: ["123A", "124B", "125C", "456B"]
-        },
-        {
-          start_stop_id: "456B",
-          end_stop_id: "789C",
-          route_id: "B",
-          estimated_time: 240,
-          stops_in_segment: ["456B", "457C", "458D", "789C"]
-        }
-      ]
-    },
-    total_estimated_time: 540,
-    remaining_stops: ["456B", "789C", "101D"]
-  };
+  // Fetch journey data when attempt is active
+  useEffect(() => {
+    if (currentAttempt) {
+      console.log('Fetching journey data...');
+      getJourney()
+        .then(data => {
+          console.log('Received journey data:', data);
+          setJourney(data);
+        })
+        .catch(error => {
+          console.error('Error fetching journey:', error);
+        });
+    } else {
+      setJourney(null);
+    }
+  }, [currentAttempt]);
 
   const renderVisitedStop = ({ item }: { item: VisitedStop }) => (
     <View className="bg-white rounded-xl py-4 px-5 mb-3 flex-row justify-between items-center shadow-sm">
@@ -193,16 +200,16 @@ function Content({
       {/* Route line with color */}
       <View className="flex-row items-center mb-2">
         <View className="w-8 h-8 rounded-full bg-blue-500 items-center justify-center mr-3">
-          <Text className="text-white font-bold">{item.route_id}</Text>
+          <Text className="text-white font-bold">{item.mta_trip.route_id}</Text>
         </View>
         <Text className="text-lg font-semibold text-gray-800">
-          {item.stops_in_segment[0]} → {item.stops_in_segment[item.stops_in_segment.length - 1]}
+          {item.start_stop_id} → {item.end_stop_id}
         </Text>
       </View>
       
       {/* Stops in segment */}
       <View className="ml-11">
-        {item.stops_in_segment.map((stop: string, stopIndex: number) => (
+        {item.all_stops_visited.map((stop: string, stopIndex: number) => (
           <View key={stop} className="flex-row items-center mb-1">
             <View className="w-2 h-2 rounded-full bg-blue-500 mr-3" />
             <Text className="text-gray-600">{stop}</Text>
@@ -211,7 +218,7 @@ function Content({
       </View>
 
       {/* Transfer indicator if not last segment */}
-      {index < mockRoute.journey.segments.length - 1 && (
+      {index < (journey?.segments.length || 0) - 1 && (
         <View className="ml-11 mt-2 mb-2">
           <View className="flex-row items-center">
             <Ionicons name="swap-horizontal" size={20} color="#6B7280" />
@@ -279,7 +286,7 @@ function Content({
               )}
             </View>
 
-            {currentAttempt && (
+            {currentAttempt && journey && (
               <>
                 <View className="bg-white rounded-xl p-4 mb-6 shadow-sm">
                   <View className="flex-row justify-between items-center">
@@ -288,12 +295,12 @@ function Content({
                         Next Stop
                       </Text>
                       <Text className="text-gray-600 mt-1">
-                        {mockRoute.journey.segments[0].stops_in_segment[0]}
+                        {journey.segments[0].start_stop_id}
                       </Text>
                     </View>
                     <TouchableOpacity 
                       className="bg-blue-600 rounded-lg px-4 py-2"
-                      onPress={() => onMarkStopVisited(mockRoute.journey.segments[0].stops_in_segment[0])}
+                      onPress={() => onMarkStopVisited(journey.segments[0].start_stop_id)}
                     >
                       <Text className="text-white font-semibold">Visited</Text>
                     </TouchableOpacity>
@@ -326,7 +333,7 @@ function Content({
                     <Ionicons name="chevron-forward" size={24} color="#6B7280" />
                   </View>
                   <Text className="text-gray-600 mt-1">
-                    {mockRoute.journey.segments.length} segments • {Math.round(mockRoute.total_estimated_time / 60)} min
+                    {journey.segments.length} segments • {Math.round(journey.total_travel_time / 60)} min
                   </Text>
                 </TouchableOpacity>
               </>
@@ -370,22 +377,24 @@ function Content({
               <Ionicons name="close" size={24} color="#6B7280" />
             </TouchableOpacity>
           </View>
-          <FlatList
-            data={mockRoute.journey.segments}
-            keyExtractor={(_, index) => index.toString()}
-            renderItem={renderRouteSegment}
-            contentContainerStyle={{ padding: 16 }}
-            ListFooterComponent={
-              <View className="mt-4 p-4 bg-blue-50 rounded-xl">
-                <Text className="text-blue-800 font-semibold">
-                  Total Estimated Time: {Math.round(mockRoute.total_estimated_time / 60)} minutes
-                </Text>
-                <Text className="text-blue-600 mt-1">
-                  {mockRoute.remaining_stops.length} stops remaining
-                </Text>
-              </View>
-            }
-          />
+          {journey && (
+            <FlatList
+              data={journey.segments}
+              keyExtractor={(_, index) => index.toString()}
+              renderItem={renderRouteSegment}
+              contentContainerStyle={{ padding: 16 }}
+              ListFooterComponent={
+                <View className="mt-4 p-4 bg-blue-50 rounded-xl">
+                  <Text className="text-blue-800 font-semibold">
+                    Total Estimated Time: {Math.round(journey.total_travel_time / 60)} minutes
+                  </Text>
+                  <Text className="text-blue-600 mt-1">
+                    {journey.segments.reduce((acc, seg) => acc + seg.all_stops_visited.length, 0)} stops in route
+                  </Text>
+                </View>
+              }
+            />
+          )}
         </View>
       </Modal>
     </View>

@@ -142,3 +142,7 @@ export async function markStopVisited(stop_id: string, visitedat: string) {
 export async function getVisitedStops() {
   return authenticatedFetch('/attempts/current/stops_visited');
 }
+
+export async function getJourney() {
+  return authenticatedFetch('/attempts/current/journey');
+}
