@@ -43,6 +43,7 @@ Table routes {
   id integer [pk, increment, not null, unique]
   route_id varchar(2) [not null, unique]
   route_name varchar(100)
+  color_hex varchar(7)
 }
 
 Table shapes {
