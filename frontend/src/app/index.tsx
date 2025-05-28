@@ -60,9 +60,12 @@ export default function Page() {
 
   async function handleStartAttempt() {
     setError(null);
+    setLoading(true);
     try {
       const attempt = await startAttempt();
       setCurrentAttempt(attempt);
+      // Refresh data to get initial visited stops and journey
+      await loadData();
     } catch (error) {
       console.error('Error starting attempt:', error);
       setError('Failed to start attempt. Please try again.');
@@ -74,6 +77,8 @@ export default function Page() {
     try {
       await endAttempt();
       setCurrentAttempt(null);
+      // Refresh data to clear visited stops and update UI
+      await loadData();
     } catch (error) {
       console.error('Error ending attempt:', error);
       setError('Failed to end attempt. Please try again.');
@@ -402,3 +407,4 @@ function Footer() {
     </View>
   );
 }
+
