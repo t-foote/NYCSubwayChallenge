@@ -21,8 +21,11 @@ class MtaTripModel(BaseModel):
 class SegmentModel(BaseModel):
     start_stop_id: str
     end_stop_id: str
+    start_stop_name: str
+    end_stop_name: str
     mta_trip: MtaTripModel
     all_stops_visited: List[str]
+    all_stops_visited_names: List[str]
 
 class JourneyModel(BaseModel):
     segments: List[SegmentModel]
@@ -62,13 +65,16 @@ async def calculate_route(
             SegmentModel(
                 start_stop_id=segment.start_stop_id,
                 end_stop_id=segment.end_stop_id,
+                start_stop_name=segment.start_stop_name,
+                end_stop_name=segment.end_stop_name,
                 mta_trip=MtaTripModel(
                     route_id=segment.mta_trip.route_id,
                     trip_id=segment.mta_trip.trip_id,
                     shape_id=segment.mta_trip.shape_id,
                     service_type=str(segment.mta_trip._service_type)
                 ),
-                all_stops_visited=segment.all_stops_visited
+                all_stops_visited=segment.all_stops_visited,
+                all_stops_visited_names=segment.all_stops_visited_names
             )
             for segment in journey.segments
         ]

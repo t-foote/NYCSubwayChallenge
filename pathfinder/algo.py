@@ -23,7 +23,7 @@ def get_optimal_journey(stop_ids_already_visited: list[str] = None) -> Journey:
     """
     if stop_ids_already_visited is None:
         stop_ids_already_visited = []
-        
+    
     # Create journey with segments
     journey = Journey()
     

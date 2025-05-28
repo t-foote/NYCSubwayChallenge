@@ -66,7 +66,7 @@ class Session:
                 os.environ['SUPABASE_SERVICE_ROLE_KEY'],
             )
             
-            # Initialize all ID mappings
+            # Initialize all ID mappings {
             # Stops
             stops_data = self.supabase.table('stops').select('id,nyct_stop_id').execute().data
             self.stop_pk_to_nyct_id = {row['id']: row['nyct_stop_id'] for row in stops_data}
@@ -86,7 +86,12 @@ class Session:
             shapes_data = self.supabase.table('shapes').select('id,shape_id').execute().data
             self.shape_pk_to_nyct_id = {row['id']: row['shape_id'] for row in shapes_data}
             self.nyct_shape_id_to_shape_pk = {row['shape_id']: row['id'] for row in shapes_data}
-            
+            # }
+
+            # populate other attributes:
+            response = self.supabase.table('stops').select('nyct_stop_id,stop_name').execute()
+            self._stops_id_to_name = {row['nyct_stop_id']: row['stop_name'] for row in response.data}
+
             self._initialized = True
 
     def get_stop_id(self, stop_pk: int) -> str:
@@ -189,12 +194,16 @@ class Session:
         dep_time_obj = datetime.strptime(time_data['dep_time'], "%H:%M:%S").time()
         return datetime.combine(today, dep_time_obj)
     
-    def get_all_stops_in_static_table(self) -> list[str]:
-        """Get all stops from the database. Memoized."""
-        if not hasattr(self, '_all_stops'):
-            response = self.supabase.table('stops').select('nyct_stop_id').execute()
-            self._all_stops = [row['nyct_stop_id'] for row in response.data]
-        return self._all_stops
+    def get_all_stop_ids(self) -> list[str]:
+        """Get all stops from the database."""
+        return list(self._stops_id_to_name.keys())
+    
+    def get_stop_name(self, nyct_stop_id: str) -> str:
+        """Get the name of a stop from the database."""
+        try:
+            return self._stops_id_to_name[nyct_stop_id]
+        except KeyError:
+            raise KeyError(f"Could not find stop name for {nyct_stop_id}")
 
     def is_valid_stop_id(self, nyct_stop_id: str) -> bool:
         """Return True if the stop id exists in the stops table."""
@@ -303,6 +312,19 @@ class Segment:
             if not self.all_stops_visited:
                 raise ValueError(f"Could not get scheduled stops for trip {self.mta_trip.trip_id}")
 
+    @property
+    def start_stop_name(self) -> str:
+        return Session().get_stop_name(self.start_stop_id)
+    
+    @property
+    def end_stop_name(self) -> str:
+        return Session().get_stop_name(self.end_stop_id)
+    
+    @property
+    def all_stops_visited_names(self) -> list[str]:
+        session = Session()
+        return [session.get_stop_name(stop_id) for stop_id in self.all_stops_visited]
+        
     @property
     def is_realtime(self) -> bool:
         return isinstance(self.mta_trip, RealtimeMtaTrip)

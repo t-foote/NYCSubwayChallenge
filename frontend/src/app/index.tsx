@@ -152,7 +152,9 @@ function Content({
   const [journey, setJourney] = useState<{
     segments: Array<{
       start_stop_id: string;
+      start_stop_name: string;
       end_stop_id: string;
+      end_stop_name: string;
       mta_trip: {
         route_id: string;
         trip_id: string;
@@ -203,7 +205,7 @@ function Content({
           <Text className="text-white font-bold">{item.mta_trip.route_id}</Text>
         </View>
         <Text className="text-lg font-semibold text-gray-800">
-          {item.start_stop_id} → {item.end_stop_id}
+          {item.start_stop_name} → {item.end_stop_name}
         </Text>
       </View>
       
@@ -212,7 +214,7 @@ function Content({
         {item.all_stops_visited.map((stop: string, stopIndex: number) => (
           <View key={stop} className="flex-row items-center mb-1">
             <View className="w-2 h-2 rounded-full bg-blue-500 mr-3" />
-            <Text className="text-gray-600">{stop}</Text>
+            <Text className="text-gray-600">{item.all_stops_visited_names[stopIndex]}</Text>
           </View>
         ))}
       </View>
@@ -222,7 +224,7 @@ function Content({
         <View className="ml-11 mt-2 mb-2">
           <View className="flex-row items-center">
             <Ionicons name="swap-horizontal" size={20} color="#6B7280" />
-            <Text className="text-gray-500 ml-2">Transfer at {item.end_stop_id}</Text>
+            <Text className="text-gray-500 ml-2">Transfer at {item.end_stop_name}</Text>
           </View>
         </View>
       )}
@@ -295,12 +297,12 @@ function Content({
                         Next Stop
                       </Text>
                       <Text className="text-gray-600 mt-1">
-                        {journey.segments[0].start_stop_id}
+                        {journey.segments[0].start_stop_name}
                       </Text>
                     </View>
                     <TouchableOpacity 
                       className="bg-blue-600 rounded-lg px-4 py-2"
-                      onPress={() => onMarkStopVisited(journey.segments[0].start_stop_id)}
+                      onPress={() => onMarkStopVisited(journey.segments[0].start_stop_name)}
                     >
                       <Text className="text-white font-semibold">Visited</Text>
                     </TouchableOpacity>
