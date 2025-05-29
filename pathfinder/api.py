@@ -5,6 +5,15 @@ from datetime import datetime
 from utils import MtaTrip, Transfer
 from algo import get_optimal_journey
 import uvicorn
+import os
+import logging
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="NYC Subway Challenge Pathfinder",
@@ -51,14 +60,14 @@ async def calculate_route(
     try:
         # Convert comma-separated string to list if provided
         visited_stops = stop_ids_already_visited.split(',') if stop_ids_already_visited else []
-        print(f"Calculating route with visited stops: {visited_stops}")
+        logger.info(f"Calculating route with visited stops: {visited_stops}")
         
         # Get the optimal journey
         journey = get_optimal_journey(visited_stops)
         if not journey.segments:
             raise ValueError("No segments found in journey")
             
-        print(f"Generated journey with {len(journey.segments)} segments")
+        logger.info(f"Generated journey with {len(journey.segments)} segments")
         
         # Convert journey to response model
         segments = [
@@ -88,18 +97,21 @@ async def calculate_route(
             segments=segments,
             total_travel_time=total_time
         )
-        print(f"Returning response: {response.model_dump_json()}")
+        logger.info(f"Returning response with {len(segments)} segments and {total_time} seconds travel time")
         return response
         
     except ValueError as e:
-        print(f"Validation error: {str(e)}")
+        logger.error(f"Validation error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"Error calculating route: {str(e)}")
-        print(f"Error type: {type(e)}")
+        logger.error(f"Error calculating route: {str(e)}")
+        logger.error(f"Error type: {type(e)}")
         import traceback
-        print(f"Traceback: {traceback.format_exc()}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run("api:app", host="0.0.0.0", port=8001, reload=True)
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "5001"))
+    logger.info(f"Starting server on {host}:{port}")
+    uvicorn.run("api:app", host=host, port=port, reload=True)

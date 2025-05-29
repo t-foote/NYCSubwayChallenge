@@ -8,3 +8,4 @@ static/scripts/csv_out/*
 .DS_Store
 
 pathfinder/__*
+.vscode/

@@ -213,21 +213,16 @@ class Session:
 
 def format_station_id(station_id: str) -> str:
     """Format a station ID to the standard format."""
-    try:
-        # Remove N/S suffix if present
-        if station_id.endswith('S') or station_id.endswith('N'):
-            station_id = station_id[:-1]
-        
+    # Remove N/S suffix if present
+    if station_id.endswith('S') or station_id.endswith('N'):
+        station_id = station_id[:-1]
         # Validate format: must be exactly 3 digits
         if not (len(station_id) == 3 and station_id.isdigit()):
             print(f"Warning: Invalid station id format: {station_id}")
             return station_id  # Return original ID instead of raising error
-        
-        return station_id
-    except Exception as e:
-        print(f"Warning: Error formatting station id {station_id}: {str(e)}")
-        return station_id  # Return original ID on any error
-
+          
+    return station_id
+    
 
 
 class MtaTrip:
@@ -267,12 +262,12 @@ class RealtimeMtaTrip(MtaTrip):
                         )
         # Copy any additional attributes needed from nyct_trip
         self.stop_time_updates = getattr(nyct_trip, 'stop_time_updates', [])
-    
+        
     def is_running_today(self) -> bool:
         return True
-
-
-
+    
+        
+    
 class Segment:
     """
     A user's segment of a journey, which consists of boarding 1 MTA trip from
@@ -324,7 +319,7 @@ class Segment:
     def all_stops_visited_names(self) -> list[str]:
         session = Session()
         return [session.get_stop_name(stop_id) for stop_id in self.all_stops_visited]
-        
+
     @property
     def is_realtime(self) -> bool:
         return isinstance(self.mta_trip, RealtimeMtaTrip)
