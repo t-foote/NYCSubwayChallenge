@@ -23,7 +23,7 @@ The "[Subway Challenge](https://en.wikipedia.org/wiki/Subway_Challenge)" is a ch
 
 <details> 
 
-  <summary>Why New York City?</summary>
+  <summary>Why New York City? (click to expand)</summary>
 
   New York City boasts the metro system with the most stations in the World, and a pre-pandemic ridership of 5.5 million per day (a majority of the city's population). The Subway Challenge – although originating in New York – has been attempted in cities around the World including [London](https://en.wikipedia.org/wiki/Tube_Challenge), Paris, Berlin, and Delhi. New York City's subway challenge, however, remains especially interesting and challenging. These reasons are threefold:
 
